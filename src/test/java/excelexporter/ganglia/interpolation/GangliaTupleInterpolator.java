@@ -9,7 +9,7 @@ public abstract class GangliaTupleInterpolator<T> implements Interpolator<T>{
 		else if(type == InterpolationType.UNIFORM)
 			innerInterpolator = new UniformInterpolator();
 		else
-			innerInterpolator = new SlopeInterpolator();
+			innerInterpolator = new LinearInterpolator();
 	}
 	
 }

@@ -8,64 +8,78 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
 
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.telekinesis.commonclasses.debug.MapPrinter;
 import org.telekinesis.commonclasses.entity.Pair;
 import org.telekinesis.excelexporter.assigner.row.RowAssigner;
 import org.telekinesis.excelexporter.sheet.SheetEditor;
+
+import com.jcraft.jsch.JSchException;
 
 import excelexporter.ganglia.importing.CsvLoader;
 import excelexporter.ganglia.interpolation.GangliaTupleInterpolator;
 import excelexporter.ganglia.lineparser.CpuTuple;
 import excelexporter.ganglia.lineparser.MemTuple;
 import excelexporter.ganglia.lineparser.NetTuple;
+import excelexporter.ganglia.log.TaskTimeCostExtractor;
 
 public class ProfileExcelExporter {
 	private static final String CPU_PAGE = "ggCpu";
 	private static final String MEM_PAGE = "ggMem";
 	private static final String NET_PAGE = "ggNet";
 	private static final String DISK_PAGE = "ggDiskState";
+	private static final String TIME_COST_PAGE = "timeCost";
 
 	private final long timeInterval;
 	private final long totalMemory;
+	private final String jobName;
 	private final CsvLoader csvLoader;
 	private final GangliaTupleProcessor<CpuTuple> cpuParser;
 	private final GangliaTupleProcessor<MemTuple> memParser;
 	private final GangliaTupleProcessor<NetTuple> netParser;
 	private final GangliaTupleProcessor<Double> diskParser;
+	private final TaskTimeCostExtractor timeCostExtractor;
 
 	public ProfileExcelExporter(long totalMemory, long timeInterval,
+			String jobName,
 			CsvLoader csvLoader,
 			GangliaTupleProcessor<CpuTuple> cpuParser,
 			GangliaTupleProcessor<MemTuple> memParser,
 			GangliaTupleProcessor<NetTuple> netParser,
-			GangliaTupleProcessor<Double> diskParser) {
+			GangliaTupleProcessor<Double> diskParser,
+			TaskTimeCostExtractor timeCostExtractor) {
 		this.totalMemory = totalMemory;
 		this.timeInterval = timeInterval;
+		this.jobName = jobName;
 		this.csvLoader = csvLoader;
 		this.cpuParser = cpuParser;
 		this.memParser = memParser;
 		this.netParser = netParser;
 		this.diskParser = diskParser;
+		this.timeCostExtractor = timeCostExtractor;
 	}
 
 	public void export(String templatePath, String exportPath, String cpuPath,
-			String memPath, String netPath, String diskPath) throws IOException {
-		loadDataFromCsv(cpuPath, memPath, netPath, diskPath);
+			String memPath, String netPath, String diskPath, String logRoot, String jobID) throws IOException, JSchException {
+		loadProfilingData(cpuPath, memPath, netPath, diskPath);
+		Map<String, Long> timeCost = timeCostExtractor.extract(logRoot, jobID);
 		Pair<Long, Long> timeBound = getTimeBound();
 		HSSFWorkbook workbook = new HSSFWorkbook(new FileInputStream(new File(templatePath)));
 		fillCpuData(workbook, timeBound);
 		fillMemData(workbook, timeBound);
 		fillNetData(workbook, timeBound);
 		fillDiskData(workbook, timeBound);
+		fillTimeCost(workbook, timeCost);
 		workbook.write(new FileOutputStream(exportPath));
 	}
 
-	private void loadDataFromCsv(String cpuPath, String memPath,
+	private void loadProfilingData(String cpuPath, String memPath,
 			String netPath, String diskPath) {
 		csvLoader.load(cpuParser.getParser(), cpuPath);
 		csvLoader.load(memParser.getParser(), memPath);
@@ -225,6 +239,23 @@ public class ProfileExcelExporter {
 		Sheet sheet = workbook.getSheet(sheetName);
 		SheetEditor.removeContinuousRows(sheet, 1);
 		return sheet;
+	}
+	
+	private void fillTimeCost(Workbook workbook, Map<String, Long> timeCost){
+	    Sheet sheet = extractAndClearSheet(workbook, TIME_COST_PAGE);
+	    System.out.println(MapPrinter.print(timeCost));
+	    SheetEditor.getCell(sheet, 1, 0).setCellValue("Map Task Time(" + jobName + ")");
+	    SheetEditor.getCell(sheet, 0, 1).setCellValue("AS processing");
+	    SheetEditor.getCell(sheet, 0, 2).setCellValue("AS load");
+	    SheetEditor.getCell(sheet, 0, 3).setCellValue("M/R framework");
+	    SheetEditor.getCell(sheet, 1, 1).setCellValue(timeCost.get("Map: AS processing") / 1000);
+	    SheetEditor.getCell(sheet, 1, 2).setCellValue(timeCost.get("Map: AS load") / 1000);
+	    SheetEditor.getCell(sheet, 1, 3).setCellValue(timeCost.get("Map: M/R framework") / 1000);
+	    SheetEditor.getCell(sheet, 1, 4).setCellValue("Reduce Task Time(" + jobName + ")");
+	    SheetEditor.getCell(sheet, 0, 5).setCellValue("AS total");
+	    SheetEditor.getCell(sheet, 0, 6).setCellValue("M/R framework");
+	    SheetEditor.getCell(sheet, 1, 5).setCellValue(timeCost.get("Reduce: AS total") / 1000);
+	    SheetEditor.getCell(sheet, 1, 6).setCellValue(timeCost.get("Reduce: M/R framework") / 1000);
 	}
 
 }

@@ -3,7 +3,7 @@ package excelexporter.ganglia.interpolation;
 public enum InterpolationType {
 	ZERO(new ZeroInterpolator()),
 	UNIFORM(new UniformInterpolator()), 
-	SLOP(new SlopeInterpolator());
+	LINEAR(new LinearInterpolator());
 	
 	private final Interpolator<Double> interpolator;
 

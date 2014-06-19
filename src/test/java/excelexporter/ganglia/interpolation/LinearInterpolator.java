@@ -1,12 +1,12 @@
 package excelexporter.ganglia.interpolation;
 
-public class SlopeInterpolator implements Interpolator<Double> {
+public class LinearInterpolator implements Interpolator<Double> {
 
 	@Override
 	public Double[] interpolate(Double former, Double latter, int missingNumbers) {
-		if(former == null || former == Double.NaN)
+		if(former == null || former.equals(Double.NaN))
 			former = 0D;
-		if(latter == null || latter == Double.NaN)
+		if(latter == null || latter.equals(Double.NaN))
 			latter = 0D;
 		int slots = missingNumbers + 1;
 		double interval = (latter - former) / slots;
